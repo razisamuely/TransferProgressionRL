@@ -30,7 +30,7 @@ def episode_step(env, ac_agent):
         
     return episode_reward, policy_losses
        
-def train(args,ac_agent = None):
+def train(args, ac_agent=None):
     common.print_parameters("Question 2", args)
     env = gym.make(args.env)
     input_dim = env.observation_space.shape[0]
@@ -45,13 +45,15 @@ def train(args,ac_agent = None):
             learning_rate_critic=args.learning_rate_critic
         )
     
+    # Create environment-specific paths
+    env_name = args.env.split('-')[0].lower()  # Extract base env name
     os.makedirs(DEFAULT_TASK_DATA_DIR, exist_ok=True)
     paths = [
-        f"{DEFAULT_TASK_DATA_DIR}/task_2_value_estimation_rewards.png", 
-        f"{DEFAULT_TASK_DATA_DIR}/task_2_value_estimation_losses.png"
+        f"{DEFAULT_TASK_DATA_DIR}/{env_name}_rewards.png", 
+        f"{DEFAULT_TASK_DATA_DIR}/{env_name}_losses.png"
     ]
         
-    tensorboard_logs_dir = f"{DEFAULT_TASK_DATA_DIR}/task_2"
+    tensorboard_logs_dir = f"{DEFAULT_TASK_DATA_DIR}/tensorboard_{env_name}"
     view_tensorboard = args.visual_mode == 'tensorboard'
     os.makedirs(tensorboard_logs_dir, exist_ok=True)
     writer = SummaryWriter(tensorboard_logs_dir) if view_tensorboard else None
@@ -60,7 +62,7 @@ def train(args,ac_agent = None):
     episode_policy_losses = []
     best_mean_reward = float('-inf')
     
-    loguru.logger.info("Training actor critic started")
+    loguru.logger.info(f"Training actor critic started for {args.env}")
     
     for curr_episode in range(args.episodes):
         curr_episode_rewards, curr_policy_losses = episode_step(env, ac_agent)
@@ -73,19 +75,20 @@ def train(args,ac_agent = None):
 
         if mean_reward_last_100_episodes > best_mean_reward:
             best_mean_reward = mean_reward_last_100_episodes
-            ac_agent.save_models(episode="best")
+            ac_agent.save_models(episode=f"best_{env_name}")
 
         if view_tensorboard:
-            writer.add_scalar("Reward/Episode", total_episode_reward, curr_episode)
-            writer.add_scalar("Reward/Mean_Last_100", mean_reward_last_100_episodes, curr_episode)
-            writer.add_scalar("Loss/Policy_Loss", np.mean(episode_policy_losses), curr_episode)
+            writer.add_scalar(f"{env_name}/Reward/Episode", total_episode_reward, curr_episode)
+            writer.add_scalar(f"{env_name}/Reward/Mean_Last_100", mean_reward_last_100_episodes, curr_episode)
+            writer.add_scalar(f"{env_name}/Loss/Policy_Loss", np.mean(episode_policy_losses), curr_episode)
 
         if curr_episode % args.log_interval == 0:
-            loguru.logger.info(f"Episode {curr_episode} reward: {mean_reward_last_100_episodes}")
+            loguru.logger.info(f"Episode {curr_episode} reward for {args.env}: {mean_reward_last_100_episodes}")
             if not view_tensorboard:
                 common.plot_metrics(episode_rewards, episode_policy_losses, paths)
         
         if mean_reward_last_100_episodes >= DEFAULT_EARLY_EXIT_CRITERIA:
+            ac_agent.save_models(episode=f"final_{env_name}")
             if not view_tensorboard:
                 common.plot_metrics(episode_rewards, episode_policy_losses, paths)
             break
@@ -95,4 +98,4 @@ def train(args,ac_agent = None):
         writer.close()
     
     env.close()
-    loguru.logger.info("Training actor critic done")
+    loguru.logger.info(f"Training actor critic done for {args.env}")
