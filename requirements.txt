@@ -1,0 +1,11 @@
+pandas 
+numpy 
+gymnasium[toy-text]
+tqdm
+loguru
+matplotlib
+seaborn
+pathlib
+torch
+tensorboard
+optuna
