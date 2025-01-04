@@ -18,6 +18,7 @@ class ActorCriticAgent:
         learning_rate_actor,
         learning_rate_critic,
         models_dir,
+        entropy_weight=0.01,
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.orig_input_dim = input_dim
@@ -25,6 +26,7 @@ class ActorCriticAgent:
         self.input_dim = self.MAX_INPUT_DIM
         self.output_dim = self.MAX_OUTPUT_DIM
         self.gamma = gamma
+        self.entropy_weight = entropy_weight
         self.learning_rate_actor = learning_rate_actor
         self.learning_rate_critic = learning_rate_critic
         self.actor_model = self.create_policy_network(
@@ -143,6 +145,7 @@ class ActorCriticAgent:
 
         state = torch.tensor(state, dtype=torch.float32).to(self.device)
         policy_probs = self.actor_model(state)
+        
 
         valid_probs = policy_probs[: self.orig_output_dim]
         valid_probs = valid_probs / valid_probs.sum()
@@ -156,9 +159,7 @@ class ActorCriticAgent:
         if len(state) < self.input_dim:
             state = np.pad(state, (0, self.input_dim - len(state)), "constant")
         if len(next_state) < self.input_dim:
-            next_state = np.pad(
-                next_state, (0, self.input_dim - len(next_state)), "constant"
-            )
+            next_state = np.pad(next_state, (0, self.input_dim - len(next_state)), "constant")
 
         state = torch.tensor(state, dtype=torch.float32).to(self.device)
         next_state = torch.tensor(next_state, dtype=torch.float32).to(self.device)
@@ -173,19 +174,33 @@ class ActorCriticAgent:
         )
         td_err = reward + self.gamma * next_value - value
 
+        # Get the action probabilities and calculate entropy
         policy_probs = self.actor_model(state)
         distribution = torch.distributions.Categorical(policy_probs)
         log_prob = distribution.log_prob(action)
+        
+        # Policy loss
         policy_loss = -log_prob * td_err.detach()
 
+        # Entropy loss to encourage exploration
+        entropy = distribution.entropy().mean()
+        entropy_loss = -self.entropy_weight * entropy  # Use a weight to control the strength of regularization
+
+        # Total policy loss
+        total_policy_loss = policy_loss + entropy_loss
+
+        # Value loss
         value_loss = td_err.pow(2)
 
+        # Optimize the critic
         self.critic_optimizer.zero_grad()
         value_loss.backward()
         self.critic_optimizer.step()
 
+        # Optimize the actor (policy)
         self.actor_optimizer.zero_grad()
-        policy_loss.backward()
+        total_policy_loss.backward()
         self.actor_optimizer.step()
 
-        return policy_loss.item(), value_loss.item()
+        return total_policy_loss.item(), value_loss.item()
+
