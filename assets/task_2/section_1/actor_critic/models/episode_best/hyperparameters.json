@@ -1,1 +1,0 @@
-{"gamma": 0.99, "learning_rate_actor": 0.0004, "learning_rate_critic": 0.001, "input_dim": 4, "output_dim": 2}
