@@ -18,7 +18,7 @@ class ActorCriticAgent:
         learning_rate_actor,
         learning_rate_critic,
         models_dir,
-        entropy_weight=0.01,
+        entropy_weight=0.1,
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.orig_input_dim = input_dim
@@ -44,6 +44,10 @@ class ActorCriticAgent:
         self.models_dir = models_dir
         path = Path(self.models_dir)
         path.mkdir(parents=True, exist_ok=True)
+        self.standard_normal = torch.distributions.Normal(
+            loc=torch.tensor(0.0).to(self.device),
+            scale=torch.tensor(1.0).to(self.device)
+        )
 
     def save_models(self, episode=None):
         save_path = self.models_dir
@@ -144,16 +148,46 @@ class ActorCriticAgent:
             state = np.pad(state, (0, self.input_dim - len(state)), "constant")
 
         state = torch.tensor(state, dtype=torch.float32).to(self.device)
-        policy_probs = self.actor_model(state)
-        
+        action_params = self.actor_model(state)  # Will always output 3 values
 
-        valid_probs = policy_probs[: self.orig_output_dim]
-        valid_probs = valid_probs / valid_probs.sum()
+        if self.orig_output_dim == 1:  # Continuous action space (MountainCarContinuous)
+            # mean = action_params[0]
+            # log_std = action_params[1]
+            # log_std = torch.clamp(log_std, -20, 2)
+            # std = torch.exp(log_std)
+            
+            # # Use standard normal and reparameterization trick
+            # epsilon = self.standard_normal.sample()
+            # action = mean + std * epsilon
+            
+            # # Clip the action to valid range
+            # action = torch.clamp(action, -1.0, 1.0)
+            
+            # action = action.detach().cpu().numpy()
+            valid_probs = action_params[: 2] # mean and log_std
+            valid_probs = valid_probs / valid_probs.sum()
 
-        action = np.random.choice(
-            self.orig_output_dim, p=valid_probs.detach().cpu().numpy()
-        )
-        return action
+            mean = valid_probs[0]
+            log_std = valid_probs[1]
+
+            log_std = torch.clamp(log_std, -20, 2)
+            std = torch.exp(log_std) * 0.1
+
+            epsilon = self.standard_normal.sample()
+            action = mean + std * epsilon
+            action = torch.clamp(action, -1.0, 1.0)
+            action = action.detach().cpu().numpy()
+
+            
+            return np.array([action])
+        else:  # Discrete action space (CartPole and Acrobot)
+            valid_probs = action_params[: self.orig_output_dim]
+            valid_probs = valid_probs / valid_probs.sum()
+
+            action = np.random.choice(
+                self.orig_output_dim, p=valid_probs.detach().cpu().numpy()
+            )
+            return action
 
     def train_step(self, state, action, reward, next_state, done):
         if len(state) < self.input_dim:
@@ -163,28 +197,40 @@ class ActorCriticAgent:
 
         state = torch.tensor(state, dtype=torch.float32).to(self.device)
         next_state = torch.tensor(next_state, dtype=torch.float32).to(self.device)
-        action = torch.tensor(action, dtype=torch.int64).to(self.device)
         reward = torch.tensor(reward, dtype=torch.float32).to(self.device)
 
         value = self.critic_model(state)
-        next_value = (
-            self.critic_model(next_state)
-            if not done
-            else torch.tensor(0.0).to(self.device)
-        )
+        next_value = self.critic_model(next_state) if not done else torch.tensor(0.0).to(self.device)
         td_err = reward + self.gamma * next_value - value
 
-        # Get the action probabilities and calculate entropy
-        policy_probs = self.actor_model(state)
-        distribution = torch.distributions.Categorical(policy_probs)
-        log_prob = distribution.log_prob(action)
+        # Get the action parameters and calculate log probability
+        action_params = self.actor_model(state)
         
+        if self.orig_output_dim == 1:  # Continuous action space
+            mean = action_params[0]
+            log_std = action_params[1]
+            
+            # Clamp log_std for numerical stability
+            log_std = torch.clamp(log_std, -20, 2)
+            std = torch.exp(log_std)
+            
+            action = torch.tensor(action, dtype=torch.float32).to(self.device)
+            distribution = torch.distributions.Normal(mean, std)
+            log_prob = distribution.log_prob(action)
+        else:  # Discrete action space
+            valid_probs = action_params[: self.orig_output_dim]
+            valid_probs = valid_probs / valid_probs.sum()
+            
+            action = torch.tensor(action, dtype=torch.int64).to(self.device)
+            distribution = torch.distributions.Categorical(valid_probs)
+            log_prob = distribution.log_prob(action)
+
         # Policy loss
         policy_loss = -log_prob * td_err.detach()
-
+        
         # Entropy loss to encourage exploration
         entropy = distribution.entropy().mean()
-        entropy_loss = -self.entropy_weight * entropy  # Use a weight to control the strength of regularization
+        entropy_loss = -self.entropy_weight * entropy
 
         # Total policy loss
         total_policy_loss = policy_loss + entropy_loss

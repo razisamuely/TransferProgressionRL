@@ -21,10 +21,6 @@ def episode_step(env, ac_agent, max_steps: int = 1000):
 
     while not done and step_count < max_steps:
         action = ac_agent.get_action(state)
-        if isinstance(env.action_space, gym.spaces.Box):
-            action = np.clip(action, env.action_space.low, env.action_space.high)
-        elif isinstance(env.action_space, gym.spaces.Discrete):
-            action = int(action)
 
         next_state, reward, done, _, _ = env.step(action)
         policy_loss, _ = ac_agent.train_step(state, action, reward, next_state, done)
@@ -115,8 +111,6 @@ def train(args, ac_agent=None, save_models=True):
             if not view_tensorboard:
                 common.plot_metrics(episode_rewards, episode_policy_losses, paths)
 
-        if mean_reward_last_100_episodes >= DEFAULT_EARLY_EXIT_CRITERIA:
-            break
 
     if writer:
         writer.flush()

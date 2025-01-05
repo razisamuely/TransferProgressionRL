@@ -79,7 +79,6 @@ if __name__ == "__main__":
 # --env Acrobot-v1 \
 # --models_dir assets/section_1/actor_critic/acrobot/models
 
-
 # optimize_hyperparameters
 # python src/section1/train_actor_critic_agent.py \
 # --optimize_hyper_parameters True \
