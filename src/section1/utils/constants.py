@@ -10,7 +10,7 @@ DEFAULT_EARLY_EXIT_CRITERIA = 475
 DEFAULT_TASK_DATA_DIR = "assets/task_2"
 DEFAULT_VISUAL_MODE = "tensorboard"
 DEFAULT_OPTIMIZE_HYPER_PARAMETERS_MODE = False
-MAX_STEPS = 3000
+MAX_STEPS = 1000
 DEFAULT_MODELS_DIR = "assets/section_1/actor_critic/cart_pole/models"
 GAMMA_SEARCH_CONFIG = {"min": 0.8, "max": 0.999, "step": 0.01, "name": "gamma"}
 

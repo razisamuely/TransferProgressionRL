@@ -121,27 +121,25 @@ class ActorCriticAgent:
         return instance
 
     def create_policy_network(self, input_dim, output_dim):
-        n = 128
         return torch.nn.Sequential(
             *[
-                torch.nn.Linear(input_dim, n),
+                torch.nn.Linear(input_dim, 256),
                 torch.nn.ReLU(),
-                torch.nn.Linear(n, n),
+                torch.nn.Linear(256, 256),
                 torch.nn.ReLU(),
-                torch.nn.Linear(n, output_dim),
-             #   torch.nn.Softmax(dim=-1),
+                torch.nn.Linear(256, output_dim),
+                torch.nn.Softmax(dim=-1),
             ]
         )
 
     def create_critic_network(self, input_dim, output_dim):
-        n =128
         return torch.nn.Sequential(
             *[
-                torch.nn.Linear(input_dim, n),
+                torch.nn.Linear(input_dim, 256),
                 torch.nn.ReLU(),
-                torch.nn.Linear(n, n),
+                torch.nn.Linear(256, 256),
                 torch.nn.ReLU(),
-                torch.nn.Linear(n, output_dim),
+                torch.nn.Linear(256, output_dim),
             ]
         )
 
@@ -153,23 +151,36 @@ class ActorCriticAgent:
         action_params = self.actor_model(state)  # Will always output 3 values
 
         if self.orig_output_dim == 1:  # Continuous action space (MountainCarContinuous)
-            mu = action_params[0]
-            sigma = torch.nn.functional.softplus(action_params[1]) + 1e-5
-            distribution = torch.distributions.Normal(mu, sigma)
+            # mean = action_params[0]
+            # log_std = action_params[1]
+            # log_std = torch.clamp(log_std, -20, 2)
+            # std = torch.exp(log_std)
             
-            # Use standard normal and reparameterization trick
-            action = distribution.sample()
+            # # Use standard normal and reparameterization trick
+            # epsilon = self.standard_normal.sample()
+            # action = mean + std * epsilon
             
-            # Clip the action to valid range
+            # # Clip the action to valid range
+            # action = torch.clamp(action, -1.0, 1.0)
+            
+            # action = action.detach().cpu().numpy()
+            valid_probs = action_params[: 2] # mean and log_std
+            valid_probs = valid_probs / valid_probs.sum()
+
+            mean = valid_probs[0]
+            log_std = valid_probs[1]
+
+            log_std = torch.clamp(log_std, -20, 2)
+            std = torch.exp(log_std) * 0.1
+
+            epsilon = self.standard_normal.sample()
+            action = mean + std * epsilon
             action = torch.clamp(action, -1.0, 1.0)
-            
             action = action.detach().cpu().numpy()
 
+            
             return np.array([action])
-        
         else:  # Discrete action space (CartPole and Acrobot)
-            # action_params - apply softmax to get valid probabilities
-            action_params = torch.nn.functional.softmax(action_params, dim=-1)
             valid_probs = action_params[: self.orig_output_dim]
             valid_probs = valid_probs / valid_probs.sum()
 
@@ -196,16 +207,18 @@ class ActorCriticAgent:
         action_params = self.actor_model(state)
         
         if self.orig_output_dim == 1:  # Continuous action space
-            mu = action_params[0]
-            sigma = torch.nn.functional.softplus(action_params[1]) + 1e-5
+            mean = action_params[0]
+            log_std = action_params[1]
             
+            # Clamp log_std for numerical stability
+            log_std = torch.clamp(log_std, -20, 2)
+            std = torch.exp(log_std)
             
             action = torch.tensor(action, dtype=torch.float32).to(self.device)
-            distribution = torch.distributions.Normal(mu, sigma)
+            distribution = torch.distributions.Normal(mean, std)
             log_prob = distribution.log_prob(action)
-
+            
         else:  # Discrete action space
-            action_params = torch.nn.functional.softmax(action_params, dim=-1)
             valid_probs = action_params[: self.orig_output_dim]
             valid_probs = valid_probs / valid_probs.sum()
             
