@@ -4,6 +4,7 @@ import numpy as np
 import os
 import json
 from pathlib import Path
+from torch.nn.init import xavier_uniform_
 
 
 class ActorCriticAgent:
@@ -122,6 +123,28 @@ class ActorCriticAgent:
 
         return instance
 
+    def reinit_final_layers(self):
+        xavier_uniform_(self.actor_model[-1].weight)
+        if self.actor_model[-1].bias is not None:
+            self.actor_model[-1].bias.data.fill_(0.0)
+        
+        xavier_uniform_(self.critic_model[-1].weight)
+        if self.critic_model[-1].bias is not None:
+            self.critic_model[-1].bias.data.fill_(0.0)
+
+    def reinint_all_layers(self):
+        for layer in self.actor_model:
+            if hasattr(layer, "weight"):
+                xavier_uniform_(layer.weight)
+            if hasattr(layer, "bias") and layer.bias is not None:
+                layer.bias.data.fill_(0.0)
+
+        for layer in self.critic_model:
+            if hasattr(layer, "weight"):
+                xavier_uniform_(layer.weight)
+            if hasattr(layer, "bias") and layer.bias is not None:
+                layer.bias.data.fill_(0.0)
+                
     def create_policy_network(self, input_dim, output_dim):
         n = 128
         return torch.nn.Sequential(

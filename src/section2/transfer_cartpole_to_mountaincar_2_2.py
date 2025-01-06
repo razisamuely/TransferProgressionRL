@@ -39,6 +39,7 @@ def main(args):
     pretrained_acrobot_model.orig_input_dim = input_dim
     pretrained_acrobot_model.orig_output_dim = output_dim
 
+    pretrained_acrobot_model.reinit_final_layers()
     train(args, ac_agent=pretrained_acrobot_model, save_models=True)
 
 
