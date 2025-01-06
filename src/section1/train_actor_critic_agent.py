@@ -28,6 +28,7 @@ def parse_args():
         "--env",
         type=str,
         choices=["Acrobot-v1", "MountainCarContinuous-v0", "CartPole-v1"],
+        default="CartPole-v1",
     )
     parser.add_argument("--gamma", type=float, default=DEFAULT_GAMMA)
     parser.add_argument("--episodes", type=int, default=DEFAULT_EPISODES)
@@ -44,11 +45,7 @@ def parse_args():
     parser.add_argument(
         "--learning_rate_critic", type=float, default=DEFAULT_CRITIC_LEARNING_RATE
     )
-    parser.add_argument(
-        "--target_env_name",
-        type=str,
-        choices=["Acrobot-v1", "MountainCarContinuous-v0", "CartPole-v1"],
-    )
+
     parser.add_argument("--models_dir", type=str)
     parser.add_argument(
         "--max_steps", type=int, default=MAX_STEPS, help="Maximum steps per episode"

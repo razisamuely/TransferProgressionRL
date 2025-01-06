@@ -111,7 +111,6 @@ def train(args, ac_agent=None, save_models=True):
             if not view_tensorboard:
                 common.plot_metrics(episode_rewards, episode_policy_losses, paths)
 
-
     if writer:
         writer.flush()
         writer.close()

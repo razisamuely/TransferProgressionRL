@@ -17,7 +17,7 @@ class ActorCriticAgent:
         gamma,
         learning_rate_actor,
         learning_rate_critic,
-        models_dir,
+        models_dir=None,
         entropy_weight=0.1,
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -29,24 +29,26 @@ class ActorCriticAgent:
         self.entropy_weight = entropy_weight
         self.learning_rate_actor = learning_rate_actor
         self.learning_rate_critic = learning_rate_critic
+
         self.actor_model = self.create_policy_network(
             self.MAX_INPUT_DIM, self.MAX_OUTPUT_DIM
         ).to(self.device)
         self.critic_model = self.create_critic_network(self.MAX_INPUT_DIM, 1).to(
             self.device
         )
+
         self.actor_optimizer = torch.optim.Adam(
             self.actor_model.parameters(), lr=self.learning_rate_actor
         )
         self.critic_optimizer = torch.optim.Adam(
             self.critic_model.parameters(), lr=self.learning_rate_critic
         )
+
         self.models_dir = models_dir
-        path = Path(self.models_dir)
-        path.mkdir(parents=True, exist_ok=True)
+        Path(self.models_dir).mkdir(parents=True, exist_ok=True)
         self.standard_normal = torch.distributions.Normal(
             loc=torch.tensor(0.0).to(self.device),
-            scale=torch.tensor(1.0).to(self.device)
+            scale=torch.tensor(1.0).to(self.device),
         )
 
     def save_models(self, episode=None):
@@ -123,26 +125,21 @@ class ActorCriticAgent:
     def create_policy_network(self, input_dim, output_dim):
         n = 128
         return torch.nn.Sequential(
-            *[
-                torch.nn.Linear(input_dim, n),
-                torch.nn.ReLU(),
-                torch.nn.Linear(n, n),
-                torch.nn.ReLU(),
-                torch.nn.Linear(n, output_dim),
-             #   torch.nn.Softmax(dim=-1),
-            ]
+            torch.nn.Linear(input_dim, n),
+            torch.nn.ReLU(),
+            torch.nn.Linear(n, n),
+            torch.nn.ReLU(),
+            torch.nn.Linear(n, output_dim),
         )
 
     def create_critic_network(self, input_dim, output_dim):
-        n =128
+        n = 128
         return torch.nn.Sequential(
-            *[
-                torch.nn.Linear(input_dim, n),
-                torch.nn.ReLU(),
-                torch.nn.Linear(n, n),
-                torch.nn.ReLU(),
-                torch.nn.Linear(n, output_dim),
-            ]
+            torch.nn.Linear(input_dim, n),
+            torch.nn.ReLU(),
+            torch.nn.Linear(n, n),
+            torch.nn.ReLU(),
+            torch.nn.Linear(n, output_dim),
         )
 
     def get_action(self, state):
@@ -150,91 +147,72 @@ class ActorCriticAgent:
             state = np.pad(state, (0, self.input_dim - len(state)), "constant")
 
         state = torch.tensor(state, dtype=torch.float32).to(self.device)
-        action_params = self.actor_model(state)  # Will always output 3 values
+        action_params = self.actor_model(state)
 
-        if self.orig_output_dim == 1:  # Continuous action space (MountainCarContinuous)
+        if self.orig_output_dim == 1:
             mu = action_params[0]
             sigma = torch.nn.functional.softplus(action_params[1]) + 1e-5
             distribution = torch.distributions.Normal(mu, sigma)
-            
-            # Use standard normal and reparameterization trick
             action = distribution.sample()
-            
-            # Clip the action to valid range
             action = torch.clamp(action, -1.0, 1.0)
-            
-            action = action.detach().cpu().numpy()
+            return np.array([action.detach().cpu().numpy()])
 
-            return np.array([action])
-        
-        else:  # Discrete action space (CartPole and Acrobot)
-            # action_params - apply softmax to get valid probabilities
+        else:
             action_params = torch.nn.functional.softmax(action_params, dim=-1)
             valid_probs = action_params[: self.orig_output_dim]
             valid_probs = valid_probs / valid_probs.sum()
-
-            action = np.random.choice(
+            return np.random.choice(
                 self.orig_output_dim, p=valid_probs.detach().cpu().numpy()
             )
-            return action
 
     def train_step(self, state, action, reward, next_state, done):
         if len(state) < self.input_dim:
             state = np.pad(state, (0, self.input_dim - len(state)), "constant")
         if len(next_state) < self.input_dim:
-            next_state = np.pad(next_state, (0, self.input_dim - len(next_state)), "constant")
+            next_state = np.pad(
+                next_state, (0, self.input_dim - len(next_state)), "constant"
+            )
 
         state = torch.tensor(state, dtype=torch.float32).to(self.device)
         next_state = torch.tensor(next_state, dtype=torch.float32).to(self.device)
         reward = torch.tensor(reward, dtype=torch.float32).to(self.device)
 
         value = self.critic_model(state)
-        next_value = self.critic_model(next_state) if not done else torch.tensor(0.0).to(self.device)
+        next_value = (
+            self.critic_model(next_state)
+            if not done
+            else torch.tensor(0.0).to(self.device)
+        )
         td_err = reward + self.gamma * next_value - value
 
-        # Get the action parameters and calculate log probability
         action_params = self.actor_model(state)
-        
-        if self.orig_output_dim == 1:  # Continuous action space
+
+        if self.orig_output_dim == 1:
             mu = action_params[0]
             sigma = torch.nn.functional.softplus(action_params[1]) + 1e-5
-            
-            
             action = torch.tensor(action, dtype=torch.float32).to(self.device)
             distribution = torch.distributions.Normal(mu, sigma)
             log_prob = distribution.log_prob(action)
-
-        else:  # Discrete action space
+        else:
             action_params = torch.nn.functional.softmax(action_params, dim=-1)
             valid_probs = action_params[: self.orig_output_dim]
             valid_probs = valid_probs / valid_probs.sum()
-            
             action = torch.tensor(action, dtype=torch.int64).to(self.device)
             distribution = torch.distributions.Categorical(valid_probs)
             log_prob = distribution.log_prob(action)
 
-        # Policy loss
         policy_loss = -log_prob * td_err.detach()
-        
-        # Entropy loss to encourage exploration
         entropy = distribution.entropy().mean()
         entropy_loss = -self.entropy_weight * entropy
-
-        # Total policy loss
         total_policy_loss = policy_loss + entropy_loss
-
-        # Value loss
         value_loss = td_err.pow(2)
 
-        # Optimize the critic
         self.critic_optimizer.zero_grad()
         value_loss.backward()
         self.critic_optimizer.step()
 
-        # Optimize the actor (policy)
         self.actor_optimizer.zero_grad()
         total_policy_loss.backward()
         self.actor_optimizer.step()
 
         return total_policy_loss.item(), value_loss.item()
-
