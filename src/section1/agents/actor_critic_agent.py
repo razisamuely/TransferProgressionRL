@@ -109,13 +109,17 @@ class ActorCriticAgent:
             models_dir=hyper_params["models_dir"],
         )
 
-        actor_checkpoint = torch.load(os.path.join(load_path, "actor.pth"))
+        actor_checkpoint = torch.load(os.path.join(load_path, "actor.pth"),
+                                              map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                                      )
         instance.actor_model.load_state_dict(actor_checkpoint["model_state_dict"])
         instance.actor_optimizer.load_state_dict(
             actor_checkpoint["optimizer_state_dict"]
         )
 
-        critic_checkpoint = torch.load(os.path.join(load_path, "critic.pth"))
+        critic_checkpoint = torch.load(os.path.join(load_path, "critic.pth"),
+                                               map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                                       )
         instance.critic_model.load_state_dict(critic_checkpoint["model_state_dict"])
         instance.critic_optimizer.load_state_dict(
             critic_checkpoint["optimizer_state_dict"]

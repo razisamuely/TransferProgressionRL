@@ -1,3 +1,4 @@
+from typing import Union
 import gymnasium as gym
 import numpy as np
 import optuna
@@ -50,16 +51,20 @@ def parse_args():
     parser.add_argument(
         "--max_steps", type=int, default=MAX_STEPS, help="Maximum steps per episode"
     )
+    parser.add_argument(
+        "--early_exit", type=int, default=None, help="Criteria for early stop"
+    )
 
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    if args.optimize_hyper_parameters:
-        optimize_hyperparameters(args)
-    else:
-        train(args)
+    # if args.optimize_hyper_parameters:
+    #     optimize_hyperparameters(args)
+    # else:
+    #     train(args)
+    train(args)
 
 # Train without hyperparameter optimization CartPole
 # python src/section1/train_actor_critic_agent.py \

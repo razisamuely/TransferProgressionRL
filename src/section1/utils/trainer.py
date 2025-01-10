@@ -39,7 +39,9 @@ def episode_step(env, ac_agent, max_steps: int = 1000):
     return episode_reward, policy_losses
 
 
-def train(args, ac_agent=None, save_models=True):
+def train(args,
+          ac_agent=None,
+          save_models=True):
     save_dir = args.models_dir
     env = gym.make(args.env)
     input_dim = env.observation_space.shape[0]
@@ -59,7 +61,7 @@ def train(args, ac_agent=None, save_models=True):
             learning_rate_critic=args.learning_rate_critic,
             models_dir=args.models_dir,
         )
-
+    early_stop_enabled=args.early_exit is not None
     env_name = args.env.split("-")[0].lower()
     os.makedirs(save_dir, exist_ok=True)
     paths = [f"{save_dir}/{env_name}_rewards.png", f"{save_dir}/{env_name}_losses.png"]
@@ -110,7 +112,13 @@ def train(args, ac_agent=None, save_models=True):
             )
             if not view_tensorboard:
                 common.plot_metrics(episode_rewards, episode_policy_losses, paths)
-
+        if early_stop_enabled:
+            if args.early_exit<= mean_reward_last_100_episodes:
+                loguru.logger.info(
+                    f"Early Exit! ({mean_reward_last_100_episodes}>={args.early_exit})"
+                )
+                break
+                
     if writer:
         writer.flush()
         writer.close()
