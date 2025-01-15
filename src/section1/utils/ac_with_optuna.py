@@ -9,7 +9,7 @@ from src.section1.utils.constants import (
     CRITIC_LR_SEARCH_CONFIG,
     OPTUNA_NUM_TRIALS,
 )
-from src.section1.utils.trainer import train
+from src.section1.utils.script.trainer import train
 
 
 def optimize_hyperparameters(args):

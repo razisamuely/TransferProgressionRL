@@ -1,7 +1,7 @@
 
 from src.section1.agents.actor_critic_agent import ActorCriticAgent
 import argparse
-from src.section1.utils.trainer import train
+from src.section1.utils.script.trainer import train
 import gymnasium as gym
 from src.section1.utils.constants import (
     DEFAULT_GAMMA,

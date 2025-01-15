@@ -1,241 +1,193 @@
-import torch
-import gymnasium as gym
+import copy
 import numpy as np
+import torch
+import torch.nn as nn
 import os
 import json
-from pathlib import Path
-from torch.nn.init import xavier_uniform_
-
+from collections import deque
+from gymnasium.spaces import Box
+from src.section1.utils.ounoise import OUNoise
+from src.section1.utils.dataloger import DataLoger
+from src.section1.agents.actor_critic import Actor, Critic
+from src.section1.utils.constants import MAX_INPUT_DIM, MAX_OUTPUT_DIM
 
 class ActorCriticAgent:
-    MAX_INPUT_DIM = 6
-    MAX_OUTPUT_DIM = 3
+    MAX_INPUT_DIM = MAX_INPUT_DIM
+    MAX_OUTPUT_DIM = MAX_OUTPUT_DIM
 
-    def __init__(
-        self,
-        input_dim,
-        output_dim,
-        gamma,
-        learning_rate_actor,
-        learning_rate_critic,
-        models_dir=None,
-        entropy_weight=0.1,
-    ):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.orig_input_dim = input_dim
-        self.orig_output_dim = output_dim
-        self.input_dim = self.MAX_INPUT_DIM
-        self.output_dim = self.MAX_OUTPUT_DIM
+    def __init__(self, env, hidden1, hidden2, gamma, lr_actor=0.00001, lr_critic=0.0001, 
+                 buf_size=1000000, sync_freq=100, batch_size=64, exp_name='exp1', 
+                 device='cuda', models_dir='./models'):
+        self.env = env
+        self.max_n_action = self.MAX_OUTPUT_DIM
+        self.n_action = self._get_action_space_size(env)
+        self.n_state = self.MAX_INPUT_DIM
+        self.device = device
+        self._is_discrete = not isinstance(env.action_space, Box)
+
+        self._init_networks(hidden1, hidden2)
+        self._init_memory(buf_size, batch_size)
+        self._init_training_params(gamma, lr_actor, lr_critic, batch_size, sync_freq)
+        self._init_exploration()
+        self._init_logging(exp_name, models_dir)
+    
+    def _init_networks(self, hidden1, hidden2):
+        self.actor = Actor(self.n_state, self.max_n_action, self.n_action, 
+                         hidden1, hidden2, self.env.action_space).to(self.device)
+        self.critic = Critic(self.n_state, hidden1, hidden2).to(self.device)
+        self.target_critic = copy.deepcopy(self.critic)
+
+    def _init_memory(self, buf_size, batch_size):
+        self.buf_size = buf_size
+        self.batch_size = batch_size
+        self.buffer = deque(maxlen=buf_size)
+        self.bf_counter = 0
+
+    def _init_training_params(self, gamma, lr_actor, lr_critic, batch_size, sync_freq):
         self.gamma = gamma
-        self.entropy_weight = entropy_weight
-        self.learning_rate_actor = learning_rate_actor
-        self.learning_rate_critic = learning_rate_critic
+        self.lr_actor = lr_actor
+        self.lr_critic = lr_critic
+        self.batch_size = batch_size
+        self.sync_freq = sync_freq
+        self.learn_counter = 0
+        self.optim_actor = torch.optim.Adam(self.actor.parameters(), lr=lr_actor)
+        self.optim_critic = torch.optim.Adam(self.critic.parameters(), lr=lr_critic)
+        self.mse_loss = nn.MSELoss()
 
-        self.actor_model = self.create_policy_network(
-            self.MAX_INPUT_DIM, self.MAX_OUTPUT_DIM
-        ).to(self.device)
-        self.critic_model = self.create_critic_network(self.MAX_INPUT_DIM, 1).to(
-            self.device
-        )
+    def _init_exploration(self):
+        self.explore_mu = 0.2
+        self.explore_theta = 0.15
+        self.explore_sigma = 0.2
+        self.noise = OUNoise(self.n_action, self.explore_mu, self.explore_theta, self.explore_sigma)
 
-        self.actor_optimizer = torch.optim.Adam(
-            self.actor_model.parameters(), lr=self.learning_rate_actor
-        )
-        self.critic_optimizer = torch.optim.Adam(
-            self.critic_model.parameters(), lr=self.learning_rate_critic
-        )
-
+    def _init_logging(self, exp_name, models_dir):
+        self.exp_name = exp_name
         self.models_dir = models_dir
-        Path(self.models_dir).mkdir(parents=True, exist_ok=True)
-        self.standard_normal = torch.distributions.Normal(
-            loc=torch.tensor(0.0).to(self.device),
-            scale=torch.tensor(1.0).to(self.device),
-        )
+        self.loger = DataLoger(models_dir+ '/tensorboard/' + exp_name)
 
-    def save_models(self, episode=None):
-        save_path = self.models_dir
-        if episode is not None:
-            save_path = os.path.join(save_path, f"episode_{episode}")
-            os.makedirs(save_path, exist_ok=True)
+    @staticmethod
+    def _get_action_space_size(env):
+        return env.action_space.shape[0] if isinstance(env.action_space, Box) else env.action_space.n
+
+    def save_transition(self, state, action, reward, nxt_state, done):
+        transition = np.hstack((state, action, reward, nxt_state, done))
+        self.buffer.append(transition)
+        self.bf_counter += 1
+
+    def predict(self, state):
+        state = torch.Tensor(state).to(self.device)
+        dist = self.actor(state)
+        return dist.sample().cpu().numpy()
+
+    def sample_act(self, state, noise_scale=1.0):
+        action = self.predict(state)
+        if self._is_discrete:
+            return action
+        return action + self.noise.sample() * noise_scale
+
+    def sample_batch(self):
+        max_buffer = min(self.bf_counter, self.buf_size)
+        if max_buffer < self.batch_size:
+            return None
+            
+        # Convert last two transitions from deque to numpy array
+        # Note: deque[-n:] returns last n items
+        batch = np.array(list(self.buffer)[-2:])
+        
+        state = batch[:, :self.n_state]
+        action = batch[:, self.n_state:self.n_state + 1]
+        reward = batch[:, self.n_state + 1:self.n_state + 2]
+        nxt_state = batch[:, self.n_state + 2:self.n_state * 2 + 2]
+        done = batch[:, self.n_state * 2 + 2:]
+        
+        return state, action, reward, nxt_state, done
+
+    def learn(self, epoch, step, cur_state):
+        max_buffer = min(self.bf_counter, self.buf_size)
+        if max_buffer < self.batch_size:
+            return
+
+        self.learn_counter += 1
+        if self.learn_counter % self.sync_freq == 0:
+            self.target_critic.load_state_dict(self.critic.state_dict())
+
+        state, action, reward, nxt_state, done = self.sample_batch()
+        state = torch.Tensor(state).to(self.device)
+        action = torch.Tensor(action).to(self.device)
+        reward = torch.Tensor(reward).to(self.device)
+        nxt_state = torch.Tensor(nxt_state).to(self.device)
+        done = torch.Tensor(done).to(self.device)
+
+        dist, V = self.actor(state), self.critic(state)
+        nxt_V = self.target_critic(nxt_state).detach()
+        td_error = reward + self.gamma * nxt_V * (1 - done) - V
+
+        actor_loss = (-dist.log_prob(action) * td_error.detach()).mean()
+        critic_loss = self.mse_loss(V, reward + self.gamma * nxt_V * (1 - done))
+
+        self.optim_actor.zero_grad()
+        actor_loss.backward()
+        nn.utils.clip_grad_norm_(self.actor.parameters(), 3)
+        self.optim_actor.step()
+
+        self.optim_critic.zero_grad()
+        critic_loss.backward()
+        self.optim_critic.step()
+
+        if step % 100 == 0:
+            self.loger.log('actor_loss', actor_loss.item(), step)
+            self.loger.log('critic_loss', critic_loss.item(), step)
+
+    def save_model(self, epoch, avg_score):
+        save_path = os.path.join(self.models_dir, self.exp_name)
+        if epoch is not None:
+            save_path = os.path.join(save_path, f"episode_{epoch}")
+        os.makedirs(save_path, exist_ok=True)
 
         actor_path = os.path.join(save_path, "actor.pth")
-        torch.save(
-            {
-                "model_state_dict": self.actor_model.state_dict(),
-                "optimizer_state_dict": self.actor_optimizer.state_dict(),
-                "input_dim": int(self.input_dim),
-                "output_dim": int(self.output_dim),
-                "learning_rate": float(self.learning_rate_actor),
-            },
-            actor_path,
-        )
+        torch.save({
+            "model_state_dict": self.actor.state_dict(),
+            "optimizer_state_dict": self.optim_actor.state_dict(),
+            "input_dim": int(self.n_state),
+            "output_dim": int(self.n_action),
+            "learning_rate": float(self.lr_actor),
+        }, actor_path)
 
         critic_path = os.path.join(save_path, "critic.pth")
-        torch.save(
-            {
-                "model_state_dict": self.critic_model.state_dict(),
-                "optimizer_state_dict": self.critic_optimizer.state_dict(),
-                "input_dim": int(self.input_dim),
-                "output_dim": 1,
-                "learning_rate": float(self.learning_rate_critic),
-            },
-            critic_path,
-        )
+        torch.save({
+            "model_state_dict": self.critic.state_dict(),
+            "optimizer_state_dict": self.optim_critic.state_dict(),
+            "input_dim": int(self.n_state),
+            "output_dim": 1,
+            "learning_rate": float(self.lr_critic),
+        }, critic_path)
 
         hyper_params = {
             "gamma": float(self.gamma),
-            "learning_rate_actor": float(self.learning_rate_actor),
-            "learning_rate_critic": float(self.learning_rate_critic),
-            "input_dim": int(self.input_dim),
-            "output_dim": int(self.output_dim),
-            "orig_input_dim": int(self.orig_input_dim),
-            "orig_output_dim": int(self.orig_output_dim),
-            "models_dir": str(self.models_dir),
+            "learning_rate_actor": float(self.lr_actor),
+            "learning_rate_critic": float(self.lr_critic),
+            "input_dim": int(self.n_state),
+            "output_dim": int(self.n_action),
+            "orig_input_dim": int(self.n_state),
+            "orig_output_dim": int(self.n_action),
+            "models_dir": str(save_path),
         }
         with open(os.path.join(save_path, "hyperparameters.json"), "w") as f:
             json.dump(hyper_params, f)
 
-    @classmethod
-    def load_models(cls, load_path):
+    @staticmethod
+    def load_model(self, load_path):
         with open(os.path.join(load_path, "hyperparameters.json"), "r") as f:
             hyper_params = json.load(f)
 
-        instance = cls(
-            input_dim=hyper_params["orig_input_dim"],
-            output_dim=hyper_params["orig_output_dim"],
-            gamma=hyper_params["gamma"],
-            learning_rate_actor=hyper_params["learning_rate_actor"],
-            learning_rate_critic=hyper_params["learning_rate_critic"],
-            models_dir=hyper_params["models_dir"],
-        )
-
         actor_checkpoint = torch.load(os.path.join(load_path, "actor.pth"))
-        instance.actor_model.load_state_dict(actor_checkpoint["model_state_dict"])
-        instance.actor_optimizer.load_state_dict(
-            actor_checkpoint["optimizer_state_dict"]
-        )
+        self.actor.load_state_dict(actor_checkpoint["model_state_dict"])
+        self.optim_actor.load_state_dict(actor_checkpoint["optimizer_state_dict"])
 
         critic_checkpoint = torch.load(os.path.join(load_path, "critic.pth"))
-        instance.critic_model.load_state_dict(critic_checkpoint["model_state_dict"])
-        instance.critic_optimizer.load_state_dict(
-            critic_checkpoint["optimizer_state_dict"]
-        )
+        self.critic.load_state_dict(critic_checkpoint["model_state_dict"])
+        self.optim_critic.load_state_dict(critic_checkpoint["optimizer_state_dict"])
 
-        return instance
-
-    def reinit_final_layers(self):
-        xavier_uniform_(self.actor_model[-1].weight)
-        if self.actor_model[-1].bias is not None:
-            self.actor_model[-1].bias.data.fill_(0.0)
-        
-        xavier_uniform_(self.critic_model[-1].weight)
-        if self.critic_model[-1].bias is not None:
-            self.critic_model[-1].bias.data.fill_(0.0)
-
-    def reinint_all_layers(self):
-        for layer in self.actor_model:
-            if hasattr(layer, "weight"):
-                xavier_uniform_(layer.weight)
-            if hasattr(layer, "bias") and layer.bias is not None:
-                layer.bias.data.fill_(0.0)
-
-        for layer in self.critic_model:
-            if hasattr(layer, "weight"):
-                xavier_uniform_(layer.weight)
-            if hasattr(layer, "bias") and layer.bias is not None:
-                layer.bias.data.fill_(0.0)
-                
-    def create_policy_network(self, input_dim, output_dim):
-        n = 128
-        return torch.nn.Sequential(
-            torch.nn.Linear(input_dim, n),
-            torch.nn.ReLU(),
-            torch.nn.Linear(n, n),
-            torch.nn.ReLU(),
-            torch.nn.Linear(n, output_dim),
-        )
-
-    def create_critic_network(self, input_dim, output_dim):
-        n = 128
-        return torch.nn.Sequential(
-            torch.nn.Linear(input_dim, n),
-            torch.nn.ReLU(),
-            torch.nn.Linear(n, n),
-            torch.nn.ReLU(),
-            torch.nn.Linear(n, output_dim),
-        )
-
-    def get_action(self, state):
-        if len(state) < self.input_dim:
-            state = np.pad(state, (0, self.input_dim - len(state)), "constant")
-
-        state = torch.tensor(state, dtype=torch.float32).to(self.device)
-        action_params = self.actor_model(state)
-
-        if self.orig_output_dim == 1:
-            mu = action_params[0]
-            sigma = torch.nn.functional.softplus(action_params[1]) + 1e-5
-            distribution = torch.distributions.Normal(mu, sigma)
-            action = distribution.sample()
-            action = torch.clamp(action, -1.0, 1.0)
-            return np.array([action.detach().cpu().numpy()])
-
-        else:
-            action_params = torch.nn.functional.softmax(action_params, dim=-1)
-            valid_probs = action_params[: self.orig_output_dim]
-            valid_probs = valid_probs / valid_probs.sum()
-            return np.random.choice(
-                self.orig_output_dim, p=valid_probs.detach().cpu().numpy()
-            )
-
-    def train_step(self, state, action, reward, next_state, done):
-        if len(state) < self.input_dim:
-            state = np.pad(state, (0, self.input_dim - len(state)), "constant")
-        if len(next_state) < self.input_dim:
-            next_state = np.pad(
-                next_state, (0, self.input_dim - len(next_state)), "constant"
-            )
-
-        state = torch.tensor(state, dtype=torch.float32).to(self.device)
-        next_state = torch.tensor(next_state, dtype=torch.float32).to(self.device)
-        reward = torch.tensor(reward, dtype=torch.float32).to(self.device)
-
-        value = self.critic_model(state)
-        next_value = (
-            self.critic_model(next_state)
-            if not done
-            else torch.tensor(0.0).to(self.device)
-        )
-        td_err = reward + self.gamma * next_value - value
-
-        action_params = self.actor_model(state)
-
-        if self.orig_output_dim == 1:
-            mu = action_params[0]
-            sigma = torch.nn.functional.softplus(action_params[1]) + 1e-5
-            action = torch.tensor(action, dtype=torch.float32).to(self.device)
-            distribution = torch.distributions.Normal(mu, sigma)
-            log_prob = distribution.log_prob(action)
-        else:
-            action_params = torch.nn.functional.softmax(action_params, dim=-1)
-            valid_probs = action_params[: self.orig_output_dim]
-            valid_probs = valid_probs / valid_probs.sum()
-            action = torch.tensor(action, dtype=torch.int64).to(self.device)
-            distribution = torch.distributions.Categorical(valid_probs)
-            log_prob = distribution.log_prob(action)
-
-        policy_loss = -log_prob * td_err.detach()
-        entropy = distribution.entropy().mean()
-        entropy_loss = -self.entropy_weight * entropy
-        total_policy_loss = policy_loss + entropy_loss
-        value_loss = td_err.pow(2)
-
-        self.critic_optimizer.zero_grad()
-        value_loss.backward()
-        self.critic_optimizer.step()
-
-        self.actor_optimizer.zero_grad()
-        total_policy_loss.backward()
-        self.actor_optimizer.step()
-
-        return total_policy_loss.item(), value_loss.item()
+        self.gamma = float(hyper_params["gamma"])
+        self.lr_actor = float(hyper_params["learning_rate_actor"])
+        self.lr_critic = float(hyper_params["learning_rate_critic"])
