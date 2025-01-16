@@ -150,7 +150,7 @@ class ActorCriticAgent:
             "optimizer_state_dict": self.optim_actor.state_dict(),
             "input_dim": int(self.n_state),
             "output_dim": int(self.n_action),
-            "learning_rate": float(self.lr_actor),
+            "learning_rate": float(self.lr_actor)
         }, actor_path)
 
         critic_path = os.path.join(save_path, "critic.pth")
@@ -171,15 +171,12 @@ class ActorCriticAgent:
             "orig_input_dim": int(self.n_state),
             "orig_output_dim": int(self.n_action),
             "models_dir": str(save_path),
+            "average_score": float(avg_score),
         }
         with open(os.path.join(save_path, "hyperparameters.json"), "w") as f:
             json.dump(hyper_params, f)
 
-    @staticmethod
     def load_model(self, load_path):
-        with open(os.path.join(load_path, "hyperparameters.json"), "r") as f:
-            hyper_params = json.load(f)
-
         actor_checkpoint = torch.load(os.path.join(load_path, "actor.pth"))
         self.actor.load_state_dict(actor_checkpoint["model_state_dict"])
         self.optim_actor.load_state_dict(actor_checkpoint["optimizer_state_dict"])
@@ -187,7 +184,3 @@ class ActorCriticAgent:
         critic_checkpoint = torch.load(os.path.join(load_path, "critic.pth"))
         self.critic.load_state_dict(critic_checkpoint["model_state_dict"])
         self.optim_critic.load_state_dict(critic_checkpoint["optimizer_state_dict"])
-
-        self.gamma = float(hyper_params["gamma"])
-        self.lr_actor = float(hyper_params["learning_rate_actor"])
-        self.lr_critic = float(hyper_params["learning_rate_critic"])

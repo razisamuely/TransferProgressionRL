@@ -108,8 +108,8 @@ if __name__ == "__main__":
 #     --gamma 0.99 \
 #     --learning_rate_actor 0.00001 \
 #     --learning_rate_critic 0.0001 \
-#     --episodes 2000 \
-#     --max_steps 2000 \
+#     --episodes 1000 \
+#     --max_steps 1000 \
 #     --models_dir assets/section_1/actor_critic/mountain_car/models
 
 # # For CartPole-v1
@@ -119,7 +119,7 @@ if __name__ == "__main__":
 #     --gamma 0.99 \
 #     --learning_rate_actor 0.00001 \
 #     --learning_rate_critic  0.0001 \
-#     --episodes 3000 \
+#     --episodes 2000 \
 #     --max_steps 1000 \
 #     --models_dir assets/section_1/actor_critic/cart_pole/models
 
@@ -130,6 +130,6 @@ if __name__ == "__main__":
 #     --gamma 0.99 \
 #     --learning_rate_actor 0.00001 \
 #     --learning_rate_critic 0.0001 \
-#     --episodes 1000 \
+#     --episodes 3000 \
 #     --max_steps 500 \
 #     --models_dir assets/section_1/actor_critic/acrobot/models

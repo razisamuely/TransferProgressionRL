@@ -24,19 +24,23 @@ def check_episode_end(done, step_per_episode, max_steps_per_episode, episode, sc
 def train(env, agent, episodes, state_padding_size, max_steps_per_episode=3000):
     scores, avg_scores, turns, goals = [], [], [], []
     step = 0
-    episode_steps = []  # Track steps per episode
+    episode_steps = []
+    best_avg_score = float('-inf')
     
     for episode in tqdm.tqdm(range(episodes), file=sys.stdout):
         score, current_steps = episode_step(env, agent, state_padding_size, step, episode, max_steps_per_episode)
         step += current_steps
         episode_steps.append(current_steps)
         
-        # Episode metrics
         scores.append(score)
         avg_score = np.mean(scores[-100:])
         avg_steps = np.mean(episode_steps[-100:])
         
-        # Log metrics
+        if avg_score > best_avg_score:
+            best_avg_score = avg_score
+            agent.save_model('best', avg_score)
+            loguru.logger.success(f"New best model saved with avg_score: {avg_score:.2f}")
+        
         agent.loger.log('episode/reward', score, episode)
         agent.loger.log('episode/steps', current_steps, episode)
         agent.loger.log('episode/avg_reward_100', avg_score, episode)
@@ -44,15 +48,12 @@ def train(env, agent, episodes, state_padding_size, max_steps_per_episode=3000):
         agent.loger.log('episode/total_avg_reward', np.mean(scores), episode)
         agent.loger.log('episode/total_avg_steps', np.mean(episode_steps), episode)
         
-        # Original tracking
         avg_scores.append(avg_score)
         turns.append(episode)
         goals.append(90)
         
         loguru.logger.info(f"Episode: {episode}, avg_score: {avg_score:.1f}, steps: {current_steps}")
         
-        if avg_score >= 80:
-            agent.save_model(episode, avg_score)
     
     return turns, scores, avg_scores, goals
 

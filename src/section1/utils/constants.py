@@ -15,6 +15,8 @@ DEFAULT_MODELS_DIR = "assets/section_1/actor_critic/cart_pole/models"
 GAMMA_SEARCH_CONFIG = {"min": 0.8, "max": 0.999, "step": 0.01, "name": "gamma"}
 MAX_INPUT_DIM = 6
 MAX_OUTPUT_DIM = 3
+BATCH_SIZE = 64
+BUFFER_SIZE = 100000
 ACTOR_LR_SEARCH_CONFIG = {
     "min": 1e-5,
     "max": 1e-2,

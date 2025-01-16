@@ -1,0 +1,1 @@
+{"gamma": 0.99, "learning_rate_actor": 1e-05, "learning_rate_critic": 0.0001, "input_dim": 6, "output_dim": 2, "orig_input_dim": 6, "orig_output_dim": 2, "models_dir": "assets/section_1/actor_critic/cart_pole/models/cartpole_exp/episode_best", "average_score": 1000.0}
