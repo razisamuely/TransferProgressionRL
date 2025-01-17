@@ -84,7 +84,7 @@ def parse_arguments():
     parser.add_argument(
         '--source_model_path',
         type=str,
-        default='assets/section_1/actor_critic/acrobot/models/episode_best'
+        default='assets/section_1/actor_critic/acrobot/models/acrobot_exp/episode_best'
     )
     
     parser.add_argument(
@@ -107,10 +107,3 @@ def parse_arguments():
 if __name__ == '__main__':
     main()
 
-
-# python src/section2/transfer_acrobot_to_cartpole_2_1.py \
-# --source_model_path assets/section_1/actor_critic/acrobot/models/acrobot_exp/episode_best \
-# --target_env CartPole-v1 \
-# --target_models_dir assets/section_2/transfer_acrobot_to_cartpole/models \
-# --num_episodes 1000
-# --models_dir "assets/section_2/transfer_acrobot_to_cartpole/models"
