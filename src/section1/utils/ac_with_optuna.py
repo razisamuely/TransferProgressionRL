@@ -43,7 +43,8 @@ def optimize_hyperparameters(args):
             Path(args.models_dir) / "optuna" / f"trial_{trial.number}"
         )
 
-        training_stats, ac_agent = train(trial_args, save_models=False)
+        training_stats, ac_agent = train(trial_args, 
+                                         save_models=False)
         mean_reward = training_stats["best_mean_reward"]
 
         if trial.number == 0 or mean_reward > trial.study.best_value:

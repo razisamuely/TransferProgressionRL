@@ -5,7 +5,11 @@ import gymnasium as gym
 import numpy as np
 
 class Actor(nn.Module):
-    def __init__(self, n_state, max_n_action, n_action, hidden1, hidden2, action_space=None):
+    def __init__(self, n_state,
+                 max_n_action,
+                 n_action,
+                 hidden1, hidden2, 
+                 action_space=None):
         super().__init__()
         self.base = nn.Sequential(
             nn.Linear(n_state, hidden1),
@@ -72,7 +76,10 @@ class Actor(nn.Module):
         return dist
 
 class Critic(nn.Module):
-    def __init__(self, n_state, hidden1, hidden2):
+    def __init__(self,
+                 n_state,
+                 hidden1, 
+                 hidden2):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(n_state, hidden1),

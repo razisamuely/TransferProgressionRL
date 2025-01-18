@@ -15,9 +15,17 @@ class ActorCriticAgent:
     MAX_INPUT_DIM = MAX_INPUT_DIM
     MAX_OUTPUT_DIM = MAX_OUTPUT_DIM
 
-    def __init__(self, env, hidden1, hidden2, gamma, lr_actor=0.00001, lr_critic=0.0001, 
-                 buf_size=1000000, sync_freq=100, batch_size=64, exp_name='exp1', 
-                 device='cuda', models_dir='./models'):
+    def __init__(self, env, 
+                 hidden1, hidden2,
+                 gamma,
+                 lr_actor=0.00001,
+                 lr_critic=0.0001, 
+                 buf_size=1000000,
+                 sync_freq=100,
+                 batch_size=64,
+                 exp_name='exp1', 
+                 device='cuda',
+                 models_dir='./models'):
         self.env = env
         self.max_n_action = self.MAX_OUTPUT_DIM
         self.n_action = self._get_action_space_size(env)
@@ -92,7 +100,7 @@ class ActorCriticAgent:
             
         # Convert last two transitions from deque to numpy array
         # Note: deque[-n:] returns last n items
-        batch = np.array(list(self.buffer)[-2:])
+        batch = np.array(list(self.buffer)[-100:])
         
         state = batch[:, :self.n_state]
         action = batch[:, self.n_state:self.n_state + 1]
@@ -184,3 +192,5 @@ class ActorCriticAgent:
         critic_checkpoint = torch.load(os.path.join(load_path, "critic.pth"))
         self.critic.load_state_dict(critic_checkpoint["model_state_dict"])
         self.optim_critic.load_state_dict(critic_checkpoint["optimizer_state_dict"])
+        
+        

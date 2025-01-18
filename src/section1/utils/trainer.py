@@ -20,15 +20,21 @@ def check_episode_end(done, step_per_episode, max_steps_per_episode, episode, sc
         return True
     return False
 
-
-def train(env, agent, episodes, state_padding_size, max_steps_per_episode=3000):
+def train(env,
+          agent,
+          episodes,
+          state_padding_size, 
+          max_steps_per_episode=3000):
     scores, avg_scores, turns, goals = [], [], [], []
     step = 0
     episode_steps = []
     best_avg_score = float('-inf')
     
     for episode in tqdm.tqdm(range(episodes), file=sys.stdout):
-        score, current_steps = episode_step(env, agent, state_padding_size, step, episode, max_steps_per_episode)
+        score, current_steps = episode_step(
+            env, agent,
+            state_padding_size, step,
+            episode, max_steps_per_episode)
         step += current_steps
         episode_steps.append(current_steps)
         
