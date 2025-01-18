@@ -2,7 +2,7 @@ import os
 import json
 from pathlib import Path
 import numpy as np
-from src.section1.agents.actor_critic_agent import ActorCriticAgent
+from src.utils.actor_critic_agent import ActorCriticAgent
 import torch
 import torch.nn as nn
 torch.autograd.set_detect_anomaly(True)

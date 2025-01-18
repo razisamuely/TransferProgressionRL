@@ -1,9 +1,9 @@
 
-from src.section1.agents.actor_critic_agent import ActorCriticAgent
+from src.utils.actor_critic_agent import ActorCriticAgent
 import argparse
-from src.section1.utils.trainer import train
+from src.utils.trainer import train
 import gymnasium as gym
-from src.section1.utils.constants import (
+from src.utils.constants import (
     DEFAULT_GAMMA,
     DEFAULT_EPISODES,
     DEFAULT_LOG_INTERVAL,

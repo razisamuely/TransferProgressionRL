@@ -6,9 +6,9 @@ import argparse
 from torch.utils.tensorboard import SummaryWriter
 import os
 import tqdm
-from src.section1.utils import common
-from src.section1.agents.actor_critic_agent import ActorCriticAgent
-from src.section1.utils.constants import DEFAULT_EARLY_EXIT_CRITERIA
+from src.utils import common
+from src.utils.actor_critic_agent import ActorCriticAgent
+from src.utils.constants import DEFAULT_EARLY_EXIT_CRITERIA
 
 
 def episode_step(env, ac_agent, max_steps: int = 1000):

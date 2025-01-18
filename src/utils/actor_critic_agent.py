@@ -1,3 +1,4 @@
+from src.utils.network_uils import create_critic_network, create_policy_network
 import torch
 import gymnasium as gym
 import numpy as np
@@ -5,7 +6,6 @@ import os
 import json
 from pathlib import Path
 from torch.nn.init import xavier_uniform_
-
 
 class ActorCriticAgent:
     MAX_INPUT_DIM = 6
@@ -30,11 +30,10 @@ class ActorCriticAgent:
         self.entropy_weight = entropy_weight
         self.learning_rate_actor = learning_rate_actor
         self.learning_rate_critic = learning_rate_critic
-
-        self.actor_model = self.create_policy_network(
-            self.MAX_INPUT_DIM, self.MAX_OUTPUT_DIM
+        self.actor_model = create_policy_network(
+            self.MAX_INPUT_DIM, 12,self.MAX_OUTPUT_DIM
         ).to(self.device)
-        self.critic_model = self.create_critic_network(self.MAX_INPUT_DIM, 1).to(
+        self.critic_model = create_critic_network(self.MAX_INPUT_DIM,12, 1).to(
             self.device
         )
 
@@ -148,26 +147,7 @@ class ActorCriticAgent:
                 xavier_uniform_(layer.weight)
             if hasattr(layer, "bias") and layer.bias is not None:
                 layer.bias.data.fill_(0.0)
-                
-    def create_policy_network(self, input_dim, output_dim):
-        n = 128
-        return torch.nn.Sequential(
-            torch.nn.Linear(input_dim, n),
-            torch.nn.ReLU(),
-            torch.nn.Linear(n, n),
-            torch.nn.ReLU(),
-            torch.nn.Linear(n, output_dim),
-        )
-
-    def create_critic_network(self, input_dim, output_dim):
-        n = 128
-        return torch.nn.Sequential(
-            torch.nn.Linear(input_dim, n),
-            torch.nn.ReLU(),
-            torch.nn.Linear(n, n),
-            torch.nn.ReLU(),
-            torch.nn.Linear(n, output_dim),
-        )
+ 
 
     def get_action(self, state):
         if len(state) < self.input_dim:
@@ -182,6 +162,7 @@ class ActorCriticAgent:
             distribution = torch.distributions.Normal(mu, sigma)
             action = distribution.sample()
             action = torch.clamp(action, -1.0, 1.0)
+            
             return np.array([action.detach().cpu().numpy()])
 
         else:

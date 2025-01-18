@@ -3,13 +3,13 @@ import loguru
 from pathlib import Path
 import optuna
 import argparse
-from src.section1.utils.constants import (
+from src.utils.constants import (
     GAMMA_SEARCH_CONFIG,
     ACTOR_LR_SEARCH_CONFIG,
     CRITIC_LR_SEARCH_CONFIG,
     OPTUNA_NUM_TRIALS,
 )
-from src.section1.utils.trainer import train
+from src.utils.trainer import train
 
 
 def optimize_hyperparameters(args):
