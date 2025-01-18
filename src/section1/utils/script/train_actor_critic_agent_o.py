@@ -3,7 +3,7 @@ import numpy as np
 import optuna
 import argparse
 from src.section1.utils.script.trainer import train
-from src.section1.utils.ac_with_optuna import optimize_hyperparameters
+from src.section1.agents.ac_with_optuna import optimize_hyperparameters
 from pathlib import Path
 from src.section1.utils.constants import (
     DEFAULT_GAMMA,

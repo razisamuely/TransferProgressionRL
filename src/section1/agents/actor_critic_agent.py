@@ -92,7 +92,7 @@ class ActorCriticAgent:
             
         # Convert last two transitions from deque to numpy array
         # Note: deque[-n:] returns last n items
-        batch = np.array(list(self.buffer)[-2:])
+        batch = np.array(list(self.buffer)[-100:])
         
         state = batch[:, :self.n_state]
         action = batch[:, self.n_state:self.n_state + 1]

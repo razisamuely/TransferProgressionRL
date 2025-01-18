@@ -4,7 +4,7 @@ import optuna
 import argparse
 from src.section1.utils.trainer import train
 from src.section1.agents.actor_critic_agent import ActorCriticAgent, MAX_INPUT_DIM
-from src.section1.utils.ac_with_optuna import optimize_hyperparameters
+from src.section1.agents.ac_with_optuna import optimize_hyperparameters
 from pathlib import Path
 from src.section1.utils.constants import (
     DEFAULT_GAMMA,
@@ -123,3 +123,9 @@ if __name__ == "__main__":
 #     --episodes 3000 \
 #     --max_steps 500 \
 #     --models_dir assets/section_1/actor_critic/acrobot/models
+
+# Load tensorboard
+# tensorboard --logdir assets/section_1/actor_critic/cart_pole/models/tensorboard
+# tensorboard --logdir assets/section_1/actor_critic/mountain_car/models/tensorboard/mountaincar_exp
+# tensorboard --logdir assets/section_2/cartpole_to_mountain_car/models/tensorboard
+# tensorboard --logdir assets/section_2/transfer_acrobot_to_cartpole/models/tensorboard/exp1
