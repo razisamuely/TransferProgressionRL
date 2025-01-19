@@ -1,19 +1,15 @@
 import os
 import json
 from pathlib import Path
-import numpy as np
-from src.section1.agents.actor_critic_agent import ActorCriticAgent
-import torch
-import torch.nn as nn
-from visualize_agent import create_agent
-torch.autograd.set_detect_anomaly(True)
-import torch.nn.functional as F
+import copy
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import gymnasium as gym
-import numpy as np
-import copy
+
+from src.section1.agents.actor_critic_agent import ActorCriticAgent
+from visualize_agent import create_agent
 
 class ProgressiveActorNetwork(nn.Module):
     def __init__(self,
@@ -49,10 +45,8 @@ class ProgressiveActorNetwork(nn.Module):
         self.distribution = torch.distributions.Normal
 
 
-        # Dynamically set adapter input dimensions based on model output sizes
         model_1_output_dim = self.get_model_output_dim(self.model_1, n_state)
         model_2_output_dim = self.get_model_output_dim(self.model_2, n_state)
-
         self.adapter_1_layer1 = self._create_adapter(model_1_output_dim, hidden1).to(self.device)
         self.adapter_1_layer2 = self._create_adapter(model_1_output_dim, hidden2).to(self.device)
         self.adapter_2_layer1 = self._create_adapter(model_2_output_dim, hidden1).to(self.device)
@@ -62,10 +56,16 @@ class ProgressiveActorNetwork(nn.Module):
         self.adapter_2_layer1.apply(self.init_weights)
         self.adapter_2_layer2.apply(self.init_weights)
         
-        self.h11_w1=0.0
-        self.h11_w2=0.0
-        self.h12_w1=0.0
-        self.h12_w2=0.0
+        self.h11_w1=h11_w1
+        self.h11_w2=h11_w2
+        self.h12_w1=h12_w1
+        self.h12_w2=h12_w2
+        self.epsilon = 1e-5
+
+        self.base.to(self.device)
+        self.mu_layer.to(self.device)
+        self.sigma_layer.to(self.device)
+
 
     def freeze_model(self, model):
         for param in model.parameters():
@@ -100,24 +100,13 @@ class ProgressiveActorNetwork(nn.Module):
             sigma = self.sigma_layer(x[:,1:2])
 
         mu_final = 2 * torch.tanh(mu)
-        sigma_final = F.softplus(sigma) + 1e-5
+        sigma_final = F.softplus(sigma) + self.epsilon
         
         return self.distribution(mu_final, sigma_final)
 
-    def create_network(self,
-                       n_state,
-                       hidden1,
-                       hidden2, 
-                       output_dim):
-        return nn.Sequential(
-            nn.Linear(n_state, hidden1),
-            nn.ReLU(),
-            nn.Linear(hidden1, hidden2),
-            nn.ReLU(),
-            nn.Linear(hidden2, output_dim),
-        )
-
     def _create_adapter(self, input_dim, hidden_dim):
+        print(input_dim, hidden_dim)
+        
         return nn.Sequential(
             nn.Linear(input_dim, hidden_dim  ),
             nn.ReLU(),
@@ -139,12 +128,8 @@ class ProgressiveActorNetwork(nn.Module):
         x = self.base[0](state)
         x = self.base[1](x) 
         cp_h11 = self.model_1(state)  
-        if type(cp_h11) is torch.distributions.Categorical:
-            cp_h11=cp_h11.probs
         cp_adapter_h11 = self.adapter_1_layer1(cp_h11.detach()) 
         ac_h11 = self.model_2(state) 
-        if type(ac_h11) is torch.distributions.Categorical:
-            ac_h11=ac_h11.probs
         ac_adapter_h11 = self.adapter_2_layer1(ac_h11.detach())  
         combined = x +self.h11_w1 * cp_adapter_h11 + self.h11_w2 * ac_adapter_h11
         base_output = self.base[2](combined)
@@ -194,7 +179,8 @@ class ProgressiveCriticNetwork(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden2, 1)
         )
-
+        
+        #
         model_1_output_dim = self.get_model_output_dim(self.model_1, n_state)
         model_2_output_dim = self.get_model_output_dim(self.model_2, n_state)
         self.adapter_1_layer1 = self._create_adapter(model_1_output_dim, hidden1).to(self.device)
@@ -210,18 +196,6 @@ class ProgressiveCriticNetwork(nn.Module):
         for param in model.parameters():
             param.requires_grad = False
 
-    def create_network(self,
-                       n_state,
-                       hidden1,
-                       hidden2, 
-                       output_dim):
-        return nn.Sequential(
-            nn.Linear(n_state, hidden1),
-            nn.ReLU(),
-            nn.Linear(hidden1, hidden2),
-            nn.ReLU(),
-            nn.Linear(hidden2, output_dim),
-        )
 
     def _create_adapter(self, input_dim, hidden_dim):
         return nn.Sequential(
@@ -259,6 +233,7 @@ class ProgressiveCriticNetwork(nn.Module):
 
     def forward(self, state):
         return self.__join_forward(state)
+
 class ProgressiveActorCriticAgent(ActorCriticAgent):
     MAX_INPUT_DIM = 6
     MAX_OUTPUT_DIM = 3
