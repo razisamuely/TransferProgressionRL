@@ -107,9 +107,6 @@ def parse_args():
         "--max_steps", type=int, default=MAX_STEPS, help="Maximum steps per episode"
     )
     parser.add_argument(
-        "--early_exit", type=int, default=None, help="Criteria for early stop"
-    )
-    parser.add_argument(
         "--env",
         type=str,
         choices=["Acrobot-v1", "MountainCarContinuous-v0", "CartPole-v1"],
