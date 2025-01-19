@@ -105,8 +105,6 @@ class ProgressiveActorNetwork(nn.Module):
         return self.distribution(mu_final, sigma_final)
 
     def _create_adapter(self, input_dim, hidden_dim):
-        print(input_dim, hidden_dim)
-        
         return nn.Sequential(
             nn.Linear(input_dim, hidden_dim  ),
             nn.ReLU(),
